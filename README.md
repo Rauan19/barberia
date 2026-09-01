@@ -52,8 +52,12 @@ Copie `.env.example` para `.env`:
 
 | Variável | Para que serve |
 |---|---|
-| `DATABASE_URL` | String de conexão do PostgreSQL (Neon) |
+| `DATABASE_URL` | String de conexão do PostgreSQL (Neon), no endpoint com `-pooler` |
 | `AUTH_SECRET` | Chave de assinatura do cookie de sessão |
+
+Mantenha `connect_timeout=15&pool_timeout=20` na `DATABASE_URL`. O Neon suspende o
+banco depois de alguns minutos parado e leva uns 2 segundos para acordar; sem essa
+folga a primeira consulta depois da ociosidade falha.
 
 Gere um `AUTH_SECRET` novo com:
 
@@ -86,6 +90,17 @@ Agendamento público ──► PENDENTE
 - **Valores em centavos.** Nunca `float`. Datas são calculadas no fuso
   `America/Sao_Paulo`.
 - **Isolamento por conta.** Toda consulta filtra por `userId`.
+
+## Banco que dorme
+
+No plano free, o Neon suspende o compute depois de ~5 minutos sem uso e derruba as
+conexões TCP abertas. O pool do Prisma só descobre isso ao tentar usar o socket, e
+devolve `ConnectionReset`. Por isso [lib/db.ts](lib/db.ts) repete automaticamente as
+consultas que falham por erro de conexão: nesses casos a consulta nem chegou ao banco,
+então repetir é seguro e não duplica nada.
+
+A primeira requisição depois de um período parado leva uns 2 segundos. As seguintes
+ficam na casa dos 150 ms, que é a distância até a região do banco.
 
 ## Deploy (Vercel)
 
