@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentMethod {
+  PIX
+  DINHEIRO
+  CARTAO
+  OUTRO
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  DONE
+  CANCELED
+  NO_SHOW
+}
+
+enum AppointmentSource {
+  PUBLIC
+  MANUAL
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionCategory {
+  // Entradas
+  CORTE
+  VENDA_PRODUTO
+  GORJETA
+  SERVICO_EXTERNO
+  OUTRAS_ENTRADAS
+  // Saidas
+  PRODUTOS
+  ALUGUEL
+  ENERGIA
+  AGUA
+  INTERNET
+  EQUIPAMENTOS
+  MANUTENCAO
+  MARKETING
+  FUNCIONARIOS
+  OUTRAS_SAIDAS
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  barbershop   String?
+  /// Endereco da pagina publica: /b/<slug>
+  slug         String   @unique
+  phone        String?
+  address      String?
+  bio          String?
+  /// Logo guardada no proprio banco, servida por /b/<slug>/logo
+  logoData     Bytes?
+  logoMime     String?
+  /// Duracao padrao de um atendimento, em minutos
+  slotMinutes  Int      @default(30)
+  /// Quantos dias para frente o cliente pode agendar
+  bookingDays  Int      @default(14)
+  /// So aceita agendamento depois que o barbeiro monta a propria agenda.
+  bookingOpen  Boolean  @default(false)
+  /// Vira true quando ele salva a agenda semanal pela primeira vez.
+  scheduleConfigured Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clients      Client[]
+  services     Service[]
+  cuts         Cut[]
+  goals        Goal[]
+  transactions FinancialTransaction[]
+  workingHours WorkingHour[]
+  timeBlocks   TimeBlock[]
+  appointments Appointment[]
+}
+
+/// Agenda semanal padrao: um registro por dia da semana.
+model WorkingHour {
+  id          String  @id @default(cuid())
+  userId      String
+  /// 0 = domingo ... 6 = sabado
+  weekday     Int
+  open        Boolean @default(false)
+  /// Minutos desde a meia-noite (ex.: 9h = 540)
+  startMinute Int     @default(540)
+  endMinute   Int     @default(1140)
+  /// Intervalo (almoco). Nulo = sem intervalo.
+  breakStart  Int?
+  breakEnd    Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekday])
+}
+
+/// Bloqueio pontual: folga, compromisso, feriado.
+model TimeBlock {
+  id        String   @id @default(cuid())
+  userId    String
+  startAt   DateTime
+  endAt     DateTime
+  allDay    Boolean  @default(false)
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startAt])
+}
+
+model Appointment {
+  id            String            @id @default(cuid())
+  userId        String
+  clientId      String?
+  serviceId     String?
+  serviceName   String
+  priceCents    Int
+  durationMin   Int
+  customerName  String
+  customerPhone String
+  startAt       DateTime
+  endAt         DateTime
+  paymentMethod PaymentMethod
+  status        AppointmentStatus @default(PENDING)
+  source        AppointmentSource @default(PUBLIC)
+  notes         String?
+  cutId         String?           @unique
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client  Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  cut     Cut?     @relation(fields: [cutId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startAt])
+  @@index([userId, status, startAt])
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  phone     String?
+  birthDate DateTime? @db.Date
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cuts         Cut[]
+  appointments Appointment[]
+
+  @@index([userId, name])
+  @@index([userId, phone])
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  priceCents  Int
+  /// Quanto tempo o servico ocupa na agenda
+  durationMin Int      @default(30)
+  active      Boolean  @default(true)
+  /// Aparece na pagina publica de agendamento
+  bookable    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cuts         Cut[]
+  appointments Appointment[]
+
+  @@index([userId, active])
+}
+
+model Cut {
+  id            String        @id @default(cuid())
+  userId        String
+  clientId      String?
+  serviceId     String?
+  serviceName   String
+  priceCents    Int
+  paymentMethod PaymentMethod
+  notes         String?
+  performedAt   DateTime
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client      Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  service     Service?              @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  transaction FinancialTransaction?
+  appointment Appointment?
+
+  @@index([userId, performedAt])
+  @@index([clientId, performedAt])
+}
+
+model FinancialTransaction {
+  id            String              @id @default(cuid())
+  userId        String
+  type          TransactionType
+  description   String
+  category      TransactionCategory
+  amountCents   Int
+  paymentMethod PaymentMethod
+  date          DateTime
+  notes         String?
+  cutId         String?             @unique
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cut  Cut? @relation(fields: [cutId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([userId, type, date])
+}
+
+model Goal {
+  id            String   @id @default(cuid())
+  userId        String
+  year          Int
+  month         Int
+  revenueTarget Int
+  cutsTarget    Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year, month])
+}
