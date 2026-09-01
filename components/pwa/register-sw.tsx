@@ -2,15 +2,20 @@
 
 import { useEffect } from 'react';
 
-/** Registra o service worker apenas em produção. */
+/**
+ * Registra o service worker.
+ *
+ * Roda tambem em desenvolvimento porque o Chrome so oferece a instalacao do PWA
+ * depois que existe um service worker ativo. Sem isso, o botao "Instalar" nunca
+ * apareceria nem no `localhost` nem em producao no primeiro acesso.
+ */
 export function RegisterServiceWorker() {
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'production') return;
     if (!('serviceWorker' in navigator)) return;
 
     const register = () => {
       navigator.serviceWorker.register('/sw.js').catch(() => {
-        // Falhar o registro não pode quebrar o app.
+        // Falhar o registro nao pode quebrar o app.
       });
     };
 

@@ -12,6 +12,7 @@ import { ProfileForm } from '@/components/configuracoes/profile-form';
 import { LogoForm } from '@/components/configuracoes/logo-form';
 import { PublicPageForm } from '@/components/configuracoes/public-page-form';
 import { PasswordForm } from '@/components/configuracoes/password-form';
+import { InstallCard } from '@/components/pwa/install-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,8 @@ export default async function ConfiguracoesPage() {
         address={user.address}
         bio={user.bio}
       />
+
+      <InstallCard />
 
       <PasswordForm />
 

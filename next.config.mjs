@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverActions: { bodySizeLimit: '2mb' },
+    // A logo ja chega reduzida pelo navegador; a folga cobre envios fora do fluxo.
+    serverActions: { bodySizeLimit: '8mb' },
   },
 };
 

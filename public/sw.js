@@ -5,6 +5,12 @@
 const CACHE = 'barbearia-v1';
 const OFFLINE_URL = '/offline';
 
+/* Em desenvolvimento o Next reaproveita as mesmas URLs de chunk a cada recarga,
+   entao guardar em cache serviria arquivo velho e quebraria o hot reload.
+   O service worker continua registrado (o Chrome so oferece instalar o app
+   quando existe um), mas nao guarda nada. */
+const IS_DEV = ['localhost', '127.0.0.1'].includes(self.location.hostname);
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL])).then(() => self.skipWaiting()),
@@ -40,6 +46,8 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+
+  if (IS_DEV) return;
 
   const isStatic =
     url.pathname.startsWith('/_next/static/') ||

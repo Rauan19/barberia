@@ -27,7 +27,10 @@ atendimento e outro. Cada barbeiro tem sua conta e enxerga apenas os próprios d
 nome e WhatsApp e escolhe a forma de pagamento. O agendamento entra como
 **pendente** e só ocupa a agenda depois que você confirma.
 
-**PWA**: instalável na tela inicial do celular, abre sem barra do navegador.
+**PWA**: instalável na tela inicial do celular, abre sem barra do navegador. No Android
+o próprio navegador oferece a instalação; no iPhone o caminho é manual e as instruções
+aparecem em Configurações. A logo é reduzida no navegador antes de subir, então pode
+mandar imagem de qualquer tamanho.
 
 ## Stack
 

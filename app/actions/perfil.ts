@@ -66,8 +66,21 @@ export async function changePasswordAction(
   return succeed('Senha alterada!');
 }
 
-const MAX_LOGO_BYTES = 1024 * 1024; // 1 MB
-const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+/**
+ * Teto de seguranca, nao um limite que o barbeiro deva sentir.
+ * O navegador reduz a imagem para uns 100 KB antes de enviar (lib/image.ts);
+ * isso aqui so existe para barrar um envio fora do fluxo normal.
+ */
+const MAX_LOGO_BYTES = 6 * 1024 * 1024;
+
+const ALLOWED_LOGO_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/avif',
+  'image/gif',
+  'image/svg+xml',
+];
 
 /** Guarda a logo da barbearia no proprio banco. */
 export async function uploadLogoAction(
@@ -81,10 +94,10 @@ export async function uploadLogoAction(
     return fail('Escolha uma imagem.');
   }
   if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
-    return fail('Formato não suportado. Use PNG, JPG, WEBP ou SVG.');
+    return fail('Esse tipo de arquivo não é uma imagem. Use PNG, JPG, WEBP ou SVG.');
   }
   if (file.size > MAX_LOGO_BYTES) {
-    return fail('A imagem precisa ter no máximo 1 MB.');
+    return fail('Essa imagem é grande demais. Tente escolher outra.');
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());

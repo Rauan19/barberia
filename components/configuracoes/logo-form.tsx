@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useActionState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { AlertCircle, ImagePlus, Trash2 } from 'lucide-react';
+import { AlertCircle, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 
 import { removeLogoAction, uploadLogoAction } from '@/app/actions/perfil';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { ConfirmButton } from '@/components/ui/confirm-button';
 import { useToast } from '@/components/ui/toast';
 import { idleState } from '@/lib/action-state';
 import { initials } from '@/lib/utils';
+import { prepareLogo, formatBytes, type ResizeResult } from '@/lib/image';
 
 export function LogoForm({
   slug,
@@ -25,8 +26,9 @@ export function LogoForm({
   title: string;
 }) {
   const [state, formAction] = useActionState(uploadLogoAction, idleState);
-  const [preview, setPreview] = React.useState<string | null>(null);
-  const [fileName, setFileName] = React.useState('');
+  const [picked, setPicked] = React.useState<ResizeResult | null>(null);
+  const [preparing, setPreparing] = React.useState(false);
+  const [localError, setLocalError] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const toast = useToast();
   const router = useRouter();
@@ -36,81 +38,112 @@ export function LogoForm({
     if (!state.ok || handled.current) return;
     handled.current = true;
     toast({ title: state.message ?? 'Logo atualizada!' });
-    setPreview(null);
-    setFileName('');
+    setPicked(null);
     router.refresh();
   }, [state, toast, router]);
 
-  React.useEffect(() => () => {
-    if (preview) URL.revokeObjectURL(preview);
-  }, [preview]);
+  React.useEffect(
+    () => () => {
+      if (picked) URL.revokeObjectURL(picked.previewUrl);
+    },
+    [picked],
+  );
 
-  const src = preview ?? (hasLogo ? `/b/${slug}/logo` : null);
+  async function handlePick(file: File) {
+    setLocalError(null);
+    setPreparing(true);
+    try {
+      const result = await prepareLogo(file);
+      setPicked(result);
+    } catch (error) {
+      setLocalError(
+        error instanceof Error
+          ? error.message
+          : 'Não consegui abrir essa imagem. Tente um PNG ou JPG.',
+      );
+      setPicked(null);
+    } finally {
+      setPreparing(false);
+    }
+  }
+
+  const src = picked?.previewUrl ?? (hasLogo ? `/b/${slug}/logo` : null);
+  const error = localError ?? state.error;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Logo da barbearia</CardTitle>
         <CardDescription>
-          Aparece no menu e na sua página pública. PNG, JPG, WEBP ou SVG até 1 MB.
+          Aparece no menu e na sua página pública. Pode mandar a imagem do tamanho que
+          for: ela é reduzida aqui no seu celular antes de subir.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form
           action={(formData) => {
             handled.current = false;
+            if (picked) formData.set('logo', picked.file, picked.file.name);
             formAction(formData);
           }}
           className="flex flex-col gap-4 sm:flex-row sm:items-start"
         >
-          <div className="flex items-center gap-4">
-            {src ? (
-              <Image
-                src={src}
-                alt="Logo da barbearia"
-                width={80}
-                height={80}
-                unoptimized
-                className="h-20 w-20 rounded-xl border border-border object-cover"
-              />
-            ) : (
-              <span className="flex h-20 w-20 items-center justify-center rounded-xl bg-secondary text-xl font-semibold">
-                {initials(title)}
-              </span>
-            )}
-          </div>
+          {src ? (
+            <Image
+              src={src}
+              alt="Logo da barbearia"
+              width={80}
+              height={80}
+              unoptimized
+              className="h-20 w-20 shrink-0 rounded-xl border border-border object-cover"
+            />
+          ) : (
+            <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-secondary text-xl font-semibold">
+              {initials(title)}
+            </span>
+          )}
 
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <input
               ref={inputRef}
               type="file"
               name="logo"
-              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              accept="image/*"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (!file) return;
-                setFileName(file.name);
-                setPreview(URL.createObjectURL(file));
+                if (file) handlePick(file);
               }}
             />
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => inputRef.current?.click()}>
-                <ImagePlus className="h-4 w-4" />
-                Escolher imagem
+              <Button
+                variant="outline"
+                disabled={preparing}
+                onClick={() => inputRef.current?.click()}
+              >
+                {preparing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ImagePlus className="h-4 w-4" />
+                )}
+                {preparing ? 'Preparando...' : 'Escolher imagem'}
               </Button>
-              {fileName ? <SubmitButton>Enviar logo</SubmitButton> : null}
+              {picked ? <SubmitButton>Enviar logo</SubmitButton> : null}
             </div>
 
-            {fileName ? (
-              <p className="truncate text-xs text-muted-foreground">{fileName}</p>
+            {picked ? (
+              <p className="text-xs text-muted-foreground">
+                {picked.resized
+                  ? `Reduzida de ${formatBytes(picked.originalBytes)} para ${formatBytes(picked.finalBytes)}.`
+                  : `Arquivo vetorial, enviado como está (${formatBytes(picked.finalBytes)}).`}
+              </p>
             ) : null}
 
-            {state.error ? (
+            {error ? (
               <p className="flex items-center gap-2 rounded-md bg-destructive/10 p-2 text-sm text-destructive">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                {state.error}
+                {error}
               </p>
             ) : null}
           </div>
